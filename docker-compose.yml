@@ -40,6 +40,8 @@ services:
   ms1:
     build: ./microservice1
     container_name: ms1-preprocessing
+    ports:
+      - "8080:8080"
     env_file:
       - .env
     environment:

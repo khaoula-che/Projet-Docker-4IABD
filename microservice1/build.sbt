@@ -2,7 +2,7 @@ import sbtassembly.AssemblyPlugin.autoImport._
 import sbtassembly.MergeStrategy
 
 ThisBuild / version := "0.1.0-SNAPSHOT"
-ThisBuild / scalaVersion := "2.13.16"   // ✅ FIX CRITIQUE
+ThisBuild / scalaVersion := "2.13.16"
 
 lazy val root = (project in file("."))
   .settings(
@@ -20,6 +20,8 @@ lazy val root = (project in file("."))
       case PathList("META-INF", _*) => MergeStrategy.discard
       case _ => MergeStrategy.first
     },
+
+    Compile / mainClass := Some("com.weather.PreprocessingServer"), 
 
     assembly / assemblyJarName := "microservice1-assembly.jar"
   )
