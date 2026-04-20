@@ -1,0 +1,110 @@
+﻿version: "3.9"
+
+services:
+
+  # POSTGRES
+  postgres:
+    image: postgres:15-alpine
+    container_name: weather-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - backend
+
+  # API PYTHON (ML)
+  api:
+    build: ./api
+    container_name: weather-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      MODEL_PATH: ${MODEL_PATH}
+    volumes:
+      - ./api/models:/app/models
+      - ./api/label_mapping.json:/app/label_mapping.json
+    networks:
+      - backend
+    depends_on:
+      - postgres
+
+  # MICROSERVICE 1 (PREPROCESSING)
+  ms1:
+    build: ./microservice1
+    container_name: ms1-preprocessing
+    env_file:
+      - .env
+    environment:
+      INPUT_PATH: /data/input
+      OUTPUT_PATH: /data/parquet
+    volumes:
+      - ./data/input:/data/input:ro
+      - ./data/parquet:/data/parquet
+    networks:
+      - backend
+    depends_on:
+      - postgres
+
+  # MICROSERVICE 2 (PREDICTION)
+  ms2:
+    build:
+      context: .
+      dockerfile: microservice2/Dockerfile
+    container_name: ms2-prediction
+    ports:
+      - "9001:9001"
+    env_file:
+      - .env
+    environment:
+      MODEL_PATH: ${MODEL_PATH}
+      PARQUET_PATH: /data/parquet
+
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      API_HOST: ${API_HOST}
+      API_PORT: ${API_PORT}
+    volumes:
+      - ./data/parquet:/data/parquet:ro
+      - ./data/predictions:/data/predictions
+      - ./api/models:/app/models:ro
+    networks:
+      - backend
+    depends_on:
+      - postgres
+      - api
+
+  # FRONTEND (STREAMLIT)
+  frontend:
+    build: ./frontend
+    container_name: weather-frontend
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      MS2_HOST: ${MS2_HOST}
+      MS2_PORT: ${MS2_PORT}
+    networks:
+      - backend
+    depends_on:
+      - ms2
+
+# VOLUMES
+volumes:
+  postgres_data:
+
+# NETWORK
+networks:
+  backend:
