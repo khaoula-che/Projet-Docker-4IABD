@@ -21,10 +21,9 @@ lazy val root = (project in file("."))
 
     Compile / mainClass := Some("com.weather.ServerMain"),
 
-    // ✅ FIX JDBC (le seul vraiment important)
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", _*) => MergeStrategy.concat
       case PathList("META-INF", _*) => MergeStrategy.discard
       case _ => MergeStrategy.first
-    }o
+    }
   )

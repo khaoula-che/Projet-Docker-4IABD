@@ -2,12 +2,12 @@
 
 ## Présentation
 
-Ce projet est un système distribué de machine learning permettant de classifier des images météorologiques, basé sur une architecture microservices avec Docker.
+Ce projet est un système distribué de machine learning permettant de classifier des images météorologiques, basé sur une architecture microservices conteneurisée avec Docker.
 
 Il combine plusieurs technologies :
 
 - Deep Learning (ResNet50 – Transfer Learning)
-- Microservices Scala (traitement et orchestration)
+- Microservices Scala (prétraitement et orchestration)
 - FastAPI (API de prédiction)
 - PostgreSQL (stockage des résultats)
 - Streamlit (interface utilisateur)
@@ -18,7 +18,7 @@ Il combine plusieurs technologies :
 
 - Classification d’images (11 types de météo)
 - Prédiction en temps réel via API
-- Architecture microservices (Scala et Python)
+- Architecture microservices distribuée (Scala + Python)
 - Conteneurisation complète avec Docker
 - Historique et statistiques des prédictions
 - Précision du modèle d’environ 98 %
@@ -26,58 +26,75 @@ Il combine plusieurs technologies :
 ---
 
 ## Architecture
-            ┌──────────────┐
-            │  Streamlit   │
-            │  Frontend    │
-            └──────┬───────┘
-                   │ HTTP
-                   ▼
-            ┌──────────────┐
-            │     MS2      │
-            │ Prédiction   │
-            │   (Scala)    │
-            └──────┬───────┘
-                   │ HTTP
-                   ▼
-            ┌──────────────┐
-            │   FastAPI    │
-            │   Modèle ML  │
-            └──────┬───────┘
-                   │
-                   ▼
-            ┌──────────────┐
-            │ PostgreSQL   │
-            │  Base de     │
-            │  données     │
-            └──────────────┘
-
-    ┌──────────────┐
-    │     MS1      │
-    │ Prétraitement│
-    │   (Scala)    │
-    └──────────────┘
+        ┌──────────────┐
+        │  Streamlit   │
+        │  Frontend    │
+        └──────┬───────┘
+               │ HTTP
+               ▼
+        ┌──────────────┐
+        │     MS2      │
+        │ Prédiction   │
+        │   (Scala)    │
+        └──────┬───────┘
+               │ HTTP
+               ▼
+        ┌──────────────┐
+        │     MS1      │
+        │ Prétraitement│
+        │   (Scala)    │
+        └──────┬───────┘
+               │ HTTP
+               ▼
+        ┌──────────────┐
+        │   FastAPI    │
+        │   Modèle ML  │
+        └──────┬───────┘
+               │
+               ▼
+        ┌──────────────┐
+        │ PostgreSQL   │
+        │ Base de      │
+        │ données      │
+        └──────────────┘
 
 
 ---
 
 ## Microservices
 
-### MS1 – Prétraitement (Scala + Spark)
-- Lecture des images
-- Transformation en format Parquet
-- Préparation des données
+### MS1 – Prétraitement (Scala)
+
+- Expose une API HTTP (`/resize`)
+- Redimensionne les images
+- Utilisé par MS2 avant la prédiction
+- Peut aussi fonctionner en mode batch (Parquet)
+
+---
 
 ### MS2 – Prédiction (Scala)
-- Réception des images depuis le frontend
-- Appel à l’API de machine learning
-- Enregistrement des résultats dans PostgreSQL
+
+- Reçoit les images depuis le frontend
+- Appelle MS1 pour le prétraitement
+- Appelle l’API FastAPI pour la prédiction
+- Sauvegarde les résultats dans PostgreSQL
+- Expose une API (`/predict`, `/health`)
+
+---
 
 ### API – Machine Learning (FastAPI)
-- Chargement du modèle ResNet50
-- Prédiction
-- Retour des résultats au format JSON
+
+- Charge le modèle ResNet50
+- Effectue les prédictions
+- Retourne un JSON avec :
+  - label
+  - confidence
+  - probabilités
+
+---
 
 ### Frontend – Streamlit
+
 - Upload d’images
 - Affichage des résultats
 - Visualisation des statistiques
@@ -87,10 +104,12 @@ Il combine plusieurs technologies :
 ## Base de données
 
 PostgreSQL stocke :
+
 - Les prédictions
 - Les scores de confiance
+- Les probabilités complètes (JSONB)
 - Les métadonnées du modèle
-- Les dates de prédiction
+- Les timestamps
 
 ---
 
@@ -101,10 +120,10 @@ PostgreSQL stocke :
 - Taille d’entrée : 64x64
 - Nombre de classes : 11
 
+Classes :
 dew, fogsmog, frost, glaze, hail,
 lightning, rain, rainbow, rime,
 sandstorm, snow
-
 
 ---
 
@@ -116,3 +135,9 @@ sandstorm, snow
 - Docker Compose
 
 ---
+
+## Lancer le projet
+
+```bash
+docker-compose build 
+docker-compose up

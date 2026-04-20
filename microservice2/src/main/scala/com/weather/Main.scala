@@ -41,7 +41,6 @@ object Main {
 
     println("\n[ÉTAPE 4] Sauvegarde en BDD...")
 
-    // ✅ conversion Map -> String si nécessaire
     val predictionsJson =
       if (allPredictions.startsWith("{")) allPredictions
       else allPredictions.toString

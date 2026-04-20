@@ -1,11 +1,11 @@
 package com.weather
 
 import com.sun.net.httpserver.{HttpServer, HttpExchange}
-import java.net.InetSocketAddress
-import java.io.{File, FileOutputStream}
+import java.net.{InetSocketAddress, HttpURLConnection, URL}
+import java.io.{File, DataOutputStream}
+import java.nio.file.Files
 
 import com.weather.predict.PredictionService
-import com.weather.transform.ImagePreprocessor
 import com.weather.db.DatabaseManager
 
 object PredictionServer {
@@ -20,23 +20,22 @@ object PredictionServer {
       if (exchange.getRequestMethod.equalsIgnoreCase("POST")) {
         try {
 
-          val inputStream = exchange.getRequestBody
-          val imageBytes = inputStream.readAllBytes()
-          inputStream.close()
+          // recevoir image
+          val imageBytes = exchange.getRequestBody.readAllBytes()
 
           val tempOriginal = new File("/tmp/upload.jpg")
-          val fos = new FileOutputStream(tempOriginal)
-          fos.write(imageBytes)
-          fos.close()
+          Files.write(tempOriginal.toPath, imageBytes)
 
-          val resizedImage = new File("/tmp/resized.jpg")
-          ImagePreprocessor.resizeImage(tempOriginal, resizedImage)
+          // appel MS1 pour resize
+          val resizedImage = callMS1(tempOriginal)
 
+          // appel API Python
           val (label, confidence, predictions) =
             PredictionService.predict(resizedImage)
 
           println(s"[API] Résultat : $label ($confidence%)")
 
+          // sauvegarde DB
           DatabaseManager.savePrediction(
             imageName = tempOriginal.getName,
             predictedLabel = label,
@@ -56,7 +55,7 @@ object PredictionServer {
           os.write(json.getBytes)
           os.close()
 
-          // 🧹 Clean
+          // 🧹 clean
           tempOriginal.delete()
           resizedImage.delete()
 
@@ -79,18 +78,43 @@ object PredictionServer {
     })
 
     server.createContext("/health", (exchange: HttpExchange) => {
-
-      val json = """{"status":"ok","service":"ms2"}"""
+      val response = """{"status":"ok","service":"ms2"}"""
 
       exchange.getResponseHeaders.set("Content-Type", "application/json")
-      exchange.sendResponseHeaders(200, json.getBytes.length)
+      exchange.sendResponseHeaders(200, response.getBytes.length)
 
       val os = exchange.getResponseBody
-      os.write(json.getBytes)
+      os.write(response.getBytes)
       os.close()
     })
 
-    server.setExecutor(null)
     server.start()
+  }
+  def callMS1(image: File): File = {
+
+    val url = new URL("http://ms1:8080/resize")
+    val conn = url.openConnection().asInstanceOf[HttpURLConnection]
+
+    conn.setRequestMethod("POST")
+    conn.setDoOutput(true)
+    conn.setConnectTimeout(5000)
+    conn.setReadTimeout(5000)
+
+    val os = new DataOutputStream(conn.getOutputStream)
+    os.write(Files.readAllBytes(image.toPath))
+    os.close()
+
+    val responseCode = conn.getResponseCode
+
+    if (responseCode != 200) {
+      throw new RuntimeException(s"MS1 error: code $responseCode")
+    }
+
+    val responseBytes = conn.getInputStream.readAllBytes()
+
+    val resized = new File("/tmp/resized.jpg")
+    Files.write(resized.toPath, responseBytes)
+
+    resized
   }
 }
